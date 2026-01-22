@@ -6,7 +6,8 @@ from datetime import datetime
 # =====================
 # CONFIG
 # =====================
-API_URL = "http://127.0.0.1:8000/status"
+STATUS_API_URL = "http://127.0.0.1:8000/status"
+ANALYZE_API_URL = "http://127.0.0.1:8000/analyze"
 REFRESH_INTERVAL = 3  # seconds
 
 
@@ -20,7 +21,7 @@ st.set_page_config(
 )
 
 st.title("🚦 Network Anomaly Detection Dashboard")
-st.caption("Real-time host-based anomaly detection using unsupervised learning")
+st.caption("Real-time host-based anomaly detection with explainable ML")
 
 placeholder = st.empty()
 
@@ -40,14 +41,28 @@ def severity_color(severity):
     return "⚪ UNKNOWN"
 
 
+def render_explanations(explanations):
+    st.subheader("🧠 Why was this flagged?")
+
+    for exp in explanations:
+        with st.expander(f"🔍 {exp['feature']}"):
+            st.write(f"**Current value:** {round(exp['current'], 4)}")
+            st.write(f"**Baseline value:** {round(exp['baseline'], 4)}")
+            st.write(f"**Deviation:** {round(exp['deviation'], 4)}")
+
+
 # =====================
 # MAIN LOOP
 # =====================
 while True:
     try:
-        response = requests.get(API_URL, timeout=2)
-        data = response.json()
-    except Exception as e:
+        # -------------------------
+        # Fetch system status
+        # -------------------------
+        status_response = requests.get(STATUS_API_URL, timeout=2)
+        status_data = status_response.json()
+
+    except Exception:
         st.error("Unable to connect to API")
         time.sleep(REFRESH_INTERVAL)
         continue
@@ -57,10 +72,10 @@ while True:
         # -------- STATUS ROW --------
         col1, col2, col3 = st.columns(3)
 
-        status = data.get("status", "UNKNOWN")
-        severity = data.get("severity", "UNKNOWN")
-        score = data.get("score", None)
-        timestamp = data.get("timestamp", None)
+        status = status_data.get("status", "UNKNOWN")
+        severity = status_data.get("severity", "UNKNOWN")
+        score = status_data.get("score", None)
+        timestamp = status_data.get("timestamp", None)
 
         col1.metric("Status", status)
         col2.metric("Severity", severity_color(severity))
@@ -95,8 +110,8 @@ while True:
 
         st.divider()
 
-        # -------- FEATURE DETAILS --------
-        features = data.get("features", {})
+        # -------- FEATURE SNAPSHOT --------
+        features = status_data.get("features", {})
 
         if features:
             st.subheader("📊 Feature Snapshot")
@@ -114,8 +129,17 @@ while True:
             fcol3.metric("Dst IP Entropy", round(features.get("dst_ip_entropy", 0), 3))
             fcol3.metric("Dst Port Entropy", round(features.get("dst_port_entropy", 0), 3))
             fcol3.metric("Inter-arrival Std", round(features.get("std_inter_arrival", 0), 3))
-
         else:
             st.info("No feature data available yet")
+
+        st.divider()
+
+        # -------- EXPLANATIONS --------
+        explanations = status_data.get("explanations", [])
+
+        if explanations:
+            render_explanations(explanations)
+        elif status == "ANOMALY":
+            st.info("No explanations available for this anomaly yet")
 
     time.sleep(REFRESH_INTERVAL)
