@@ -1,51 +1,44 @@
-# models/isolation_forest.py
-
-import os
 import joblib
 from sklearn.ensemble import IsolationForest
-from sklearn.preprocessing import StandardScaler
+import os
 
-MODEL_PATH = "models/isolation_forest.pkl"
 
 class IsolationForestModel:
-    def __init__(self, contamination=0.05):
-        self.scaler = StandardScaler()
-        self.model = IsolationForest(
-            n_estimators=100,
-            contamination=contamination,
-            random_state=42
-        )
+    def __init__(self, contamination=0.05, model_path="models/isolation_forest.pkl"):
+        self.contamination = contamination
+        self.model_path = model_path
+        self.model = None
         self.is_trained = False
 
     def fit(self, X):
-        X_scaled = self.scaler.fit_transform(X)
-        self.model.fit(X_scaled)
+        self.model = IsolationForest(
+            n_estimators=300,
+            contamination=self.contamination,
+            random_state=42,
+            n_jobs=-1
+        )
+        self.model.fit(X)
         self.is_trained = True
 
     def score(self, x):
-        if not self.is_trained:
-            return None, None
-
-        x_scaled = self.scaler.transform([x])
-        score = self.model.decision_function(x_scaled)[0]
-        label = self.model.predict(x_scaled)[0]  # -1 = anomaly
+        """
+        Returns (score, label)
+        label = -1 → anomaly
+        label = 1  → normal
+        """
+        score = self.model.decision_function([x])[0]
+        label = self.model.predict([x])[0]
         return score, label
 
     def save(self):
-        joblib.dump(
-            {
-                "model": self.model,
-                "scaler": self.scaler
-            },
-            MODEL_PATH
-        )
+        if self.model is None:
+            raise RuntimeError("Cannot save untrained model")
+        joblib.dump(self.model, self.model_path)
 
     def load(self):
-        if not os.path.exists(MODEL_PATH):
+        if not os.path.exists(self.model_path):
             return False
 
-        data = joblib.load(MODEL_PATH)
-        self.model = data["model"]
-        self.scaler = data["scaler"]
+        self.model = joblib.load(self.model_path)
         self.is_trained = True
         return True

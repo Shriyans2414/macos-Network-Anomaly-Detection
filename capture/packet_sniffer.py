@@ -1,16 +1,17 @@
 from scapy.all import sniff, IP, TCP, UDP, ICMP
 import time
-import os
 from datetime import datetime
-from models.severity import classify_severity
 
 from capture.flow_tracker import FlowTracker
 from features.window_aggregator import WindowAggregator
 from features.feature_extractor import FeatureExtractor
 from models.isolation_forest import IsolationForestModel
 from models.feature_vectorizer import vectorize
+from models.severity import classify_severity
 from storage.state import write_state
 
+from xai.explain import AnomalyExplainer
+from xai.baseline import compute_baseline_features
 
 
 # =====================
@@ -29,10 +30,23 @@ tracker = FlowTracker(flow_timeout=FLOW_TIMEOUT)
 window_agg = WindowAggregator(window_size=WINDOW_SIZE)
 feature_extractor = FeatureExtractor()
 model = IsolationForestModel(contamination=0.05)
+
 training_buffer = []
+
+# Load model if present
 if model.load():
     print("[MODEL LOADED] Using saved baseline model")
+
 LAST_FEATURE_TIME = time.time()
+
+# ---------------------
+# Explainability (ONE-TIME INIT)
+# ---------------------
+baseline_features = compute_baseline_features()
+
+explainer = AnomalyExplainer(
+    feature_names=list(baseline_features.keys())
+)
 
 
 # =====================
@@ -107,10 +121,11 @@ def process_packet(packet):
             print(f"[TRAINING] collected {len(training_buffer)} / {TRAINING_SAMPLES}")
 
             write_state({
-            "status": "TRAINING",
+                "status": "TRAINING",
+                "severity": "UNKNOWN",
                 "score": None,
                 "features": features,
-                "timestamp": datetime.now().isoformat()
+                "explanations": []
             })
 
             if len(training_buffer) >= TRAINING_SAMPLES:
@@ -125,14 +140,32 @@ def process_packet(packet):
         score, label = model.score(x)
         severity = classify_severity(score)
 
+        explanations = []
+
         if label == -1:
+            raw_explanations = explainer.explain(
+                baseline_features,
+                features
+            )
+
+            explanations = [
+                {
+                    "feature": name,
+                    "deviation": deviation,
+                    "current": current,
+                    "baseline": baseline
+                }
+                for name, deviation, current, baseline in raw_explanations
+            ]
+
             write_state({
                 "status": "ANOMALY",
                 "severity": severity,
                 "score": float(score),
                 "features": features,
-                "timestamp": datetime.now().isoformat()
-        })
+                "explanations": explanations
+            })
+
             print("\n🚨 ANOMALY DETECTED 🚨")
             print(f"Anomaly Score: {score:.4f}")
             for k, v in features.items():
@@ -144,8 +177,9 @@ def process_packet(packet):
                 "severity": "NONE",
                 "score": float(score),
                 "features": features,
-                "timestamp": datetime.now().isoformat()
-            }) 
+                "explanations": []
+            })
+
             print(f"[NORMAL] score={score:.4f}")
 
     except Exception as e:
