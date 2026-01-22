@@ -1,0 +1,50 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ===== Virtual Environments =====
+venv/
+.venv/
+env/
+ENV/
+
+# ===== macOS =====
+.DS_Store
+__MACOSX/
+
+# ===== Logs & Runtime =====
+*.log
+logs/
+state.json
+*.pid
+
+# ===== ML / Data Artifacts =====
+models/*.joblib
+models/*.pkl
+data/
+pcaps/*.pcap
+*.pcap
+
+# ===== IDEs =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== Streamlit =====
+.streamlit/
+
+# ===== OS / Misc =====
+Thumbs.db
+
+# ===== Exceptions =====
+*.pcap
+!normal.pcap
+!anomalous.pcap
