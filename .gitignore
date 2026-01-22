@@ -48,3 +48,5 @@ Thumbs.db
 *.pcap
 !normal.pcap
 !anomalous.pcap
+
+*.pkl
